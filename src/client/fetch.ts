@@ -1,5 +1,6 @@
-import type { MilkyRawEndpoints } from '@/api.gen'
-import { withTimeout } from '@/utils'
+import type { MilkyRawEndpoints } from '@/gen/types'
+import { milkyProto } from 'src/gen/proto'
+import { joinURL, withTimeout } from '@/utils'
 
 export interface MilkyFetchOptions {
   readonly baseURL?: string | URL
@@ -27,16 +28,6 @@ interface MilkyApiResponse<T> {
   message?: string | null
 }
 
-function resolveApiURL(baseURL: string | URL, endpoint: string): URL {
-  const normalized = new URL(baseURL)
-
-  if (!normalized.pathname.endsWith('/')) {
-    normalized.pathname = `${normalized.pathname}/`
-  }
-
-  return new URL(`api/${endpoint}`, normalized)
-}
-
 export function createMilkyFetch(options: MilkyFetchCreateOptions): MilkyFetch {
   if (options.fetch == null && globalThis.fetch == null) {
     throw new Error('milky: fetch is not provided')
@@ -49,6 +40,20 @@ export function createMilkyFetch(options: MilkyFetchCreateOptions): MilkyFetch {
     params: Parameters<MilkyRawEndpoints[T]>[0],
     override?: MilkyFetchOptions,
   ): Promise<ReturnType<MilkyRawEndpoints[T]>> {
+    if (!Object.hasOwn(milkyProto, name)) {
+      throw new Error(`milky: unknown endpoint ${String(name)}`)
+    }
+
+    const [paramStruct, responseStruct] = milkyProto[name]
+
+    const paramParseResult = await paramStruct.safeParseAsync(params)
+
+    if (!paramParseResult.success) {
+      throw new Error(`milky: failed to validate params for ${String(name)}: ${paramParseResult.error.message}`)
+    }
+
+    params = paramParseResult.data as any
+
     const baseURL = override?.baseURL ?? options.baseURL
     const timeout = override?.timeout ?? options.timeout
     const token = override?.token ?? options.token
@@ -81,7 +86,7 @@ export function createMilkyFetch(options: MilkyFetchCreateOptions): MilkyFetch {
     const controller = new AbortController()
     let didTimeout = false
 
-    const request = new Request(resolveApiURL(baseURL, String(name)), {
+    const request = new Request(joinURL(baseURL, String(name)), {
       ...requestInit,
       method: 'POST',
       headers,
@@ -117,6 +122,12 @@ export function createMilkyFetch(options: MilkyFetchCreateOptions): MilkyFetch {
       throw new Error(payload.message ?? `milky: invoke ${String(name)} failed: ${payload.message} (${payload.retcode})`)
     }
 
-    return payload.data as ReturnType<MilkyRawEndpoints[T]>
+    const responseParseResult = await responseStruct.safeParseAsync(payload.data)
+
+    if (!responseParseResult.success) {
+      throw new Error(`milky: failed to parse response for ${String(name)}: ${responseParseResult.error.message}`)
+    }
+
+    return responseParseResult.data as ReturnType<MilkyRawEndpoints[T]>
   }
 }

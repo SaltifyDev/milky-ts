@@ -3,4 +3,4 @@ dist
 *.log
 .DS_Store
 
-src/api.gen.ts
+src/gen

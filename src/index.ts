@@ -1,2 +1,2 @@
+export * from './client'
 export * from './events'
-export * from './client/request'

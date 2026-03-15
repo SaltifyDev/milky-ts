@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createMilkyFetch } from '@/client/request'
+import { createMilkyFetch } from 'src/client/fetch'
 
 it('posts JSON requests to the API endpoint and returns data payloads', async () => {
   const fetchMock = vi.fn(async (request: Request) => {

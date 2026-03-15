@@ -42,3 +42,13 @@ export function withTimeout<T>(p: Promise<T> | (() => Promise<T>), timeout?: num
   const { promise, cancel } = createTimeout(timeout, onTimeout)
   return Promise.race([p, promise]).finally(cancel)
 }
+
+export function joinURL(baseURL: string | URL, endpoint: string): URL {
+  const normalized = new URL(baseURL)
+
+  if (!normalized.pathname.endsWith('/')) {
+    normalized.pathname = `${normalized.pathname}/`
+  }
+
+  return new URL(endpoint, normalized)
+}
