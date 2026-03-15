@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createMilkyFetch } from 'src/client/fetch'
+import { createMilkyFetch } from '@/client/fetch'
 
 it('posts JSON requests to the API endpoint and returns data payloads', async () => {
   const fetchMock = vi.fn(async (request: Request) => {
@@ -13,7 +13,8 @@ it('posts JSON requests to the API endpoint and returns data payloads', async ()
       status: 'ok',
       retcode: 0,
       data: {
-        uin: '10001',
+        uin: 10001,
+        nickname: 'bot',
       },
     }), {
       headers: {
@@ -28,7 +29,10 @@ it('posts JSON requests to the API endpoint and returns data payloads', async ()
     fetch: fetchMock,
   })
 
-  await expect(milkyFetch('get_login_info', undefined)).resolves.toEqual({ uin: '10001' })
+  await expect(milkyFetch('get_login_info', undefined)).resolves.toEqual({
+    uin: 10001,
+    nickname: 'bot',
+  })
   expect(fetchMock).toHaveBeenCalledOnce()
 })
 
@@ -38,13 +42,23 @@ it('allows per-request overrides for baseURL, token, fetch and headers', async (
     expect(request.url).toBe('https://override.example.com/api/get_friend_info')
     expect(request.headers.get('authorization')).toBe('Bearer override-token')
     expect(request.headers.get('x-sdk')).toBe('milky')
-    expect(await request.text()).toBe(JSON.stringify({ friend_uin: '42' }))
+    expect(await request.text()).toBe(JSON.stringify({ user_id: 10001, no_cache: false }))
 
     return new Response(JSON.stringify({
       status: 'ok',
       retcode: 0,
       data: {
-        user_id: 42,
+        friend: {
+          user_id: 10001,
+          nickname: 'friend',
+          sex: 'unknown',
+          qid: '',
+          remark: '',
+          category: {
+            category_id: 0,
+            category_name: 'default',
+          },
+        },
       },
     }), {
       headers: {
@@ -64,7 +78,7 @@ it('allows per-request overrides for baseURL, token, fetch and headers', async (
     },
   })
 
-  await expect(milkyFetch('get_friend_info', { friend_uin: '42' } as never, {
+  await expect(milkyFetch('get_friend_info', { user_id: 10001 } as never, {
     baseURL: 'https://override.example.com/',
     token: 'override-token',
     fetch: overrideFetch,
@@ -73,7 +87,19 @@ it('allows per-request overrides for baseURL, token, fetch and headers', async (
         'x-sdk': 'milky',
       },
     },
-  })).resolves.toEqual({ user_id: 42 })
+  })).resolves.toEqual({
+    friend: {
+      user_id: 10001,
+      nickname: 'friend',
+      sex: 'unknown',
+      qid: '',
+      remark: '',
+      category: {
+        category_id: 0,
+        category_name: 'default',
+      },
+    },
+  })
 
   expect(defaultFetch).not.toHaveBeenCalled()
   expect(overrideFetch).toHaveBeenCalledOnce()

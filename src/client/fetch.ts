@@ -86,7 +86,7 @@ export function createMilkyFetch(options: MilkyFetchCreateOptions): MilkyFetch {
     const controller = new AbortController()
     let didTimeout = false
 
-    const request = new Request(joinURL(baseURL, String(name)), {
+    const request = new Request(joinURL(baseURL, `api/${String(name)}`), {
       ...requestInit,
       method: 'POST',
       headers,

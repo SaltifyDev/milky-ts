@@ -16,12 +16,13 @@ for (const category of apiSpecCategories) {
     if (spec.inputStructName) {
       typeExport.add(spec.inputStructName)
       zodStructImport.add(spec.inputStructName)
-      spec.outputStructName && zodStructImport.add(spec.outputStructName)
-      zodStructsFields.push(`  '${spec.endpoint}': [${spec.inputStructName ? `z.object(${spec.inputStructName})` : 'z.void()'}, ${spec.outputStructName ? `z.object(${spec.outputStructName})` : 'z.void()'}],`)
     }
     if (spec.outputStructName) {
       typeExport.add(spec.outputStructName)
+      zodStructImport.add(spec.outputStructName)
     }
+
+    zodStructsFields.push(`  '${spec.endpoint}': [${spec.inputStructName ?? 'z.void()'}, ${spec.outputStructName ?? 'z.void()'}],`)
 
     rawEndpointsDeclarations.push(`  ${spec.endpoint}: (${spec.inputStructName ? `param: ${spec.inputStructName}` : 'params?: undefined | null'}) => ${spec.outputStructName ?? 'void'};`)
     clientEndpointsDeclarations.push(`    ${camelCase(spec.endpoint)}: '${spec.endpoint}',`)

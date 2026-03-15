@@ -51,7 +51,7 @@ export type MilkyClient = MilkyFetch & {
   [K in keyof MilkyClientEndpointNames]: {
     [M in keyof MilkyClientEndpointNames[K]]:
     MilkyClientEndpointNames[K][M] extends infer K extends keyof MilkyRawEndpoints
-      ? (param: Parameters<MilkyRawEndpoints[K]>[0], options: MilkyFetchOptions) => Promise<ReturnType<MilkyRawEndpoints[K]>> : never
+      ? (param: Parameters<MilkyRawEndpoints[K]>[0], options?: MilkyFetchOptions) => Promise<ReturnType<MilkyRawEndpoints[K]>> : never
   } & {
     readonly name: K
   } & {}
