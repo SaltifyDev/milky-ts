@@ -14,12 +14,13 @@ export type MilkyFetchCreateOptions = Omit<MilkyFetchOptions, 'baseURL'> & {
   readonly baseURL: string | URL
 }
 
-export type MilkyFetch
-  = <const T extends keyof MilkyRawEndpoints>(
+export interface MilkyFetch {
+  <const T extends keyof MilkyRawEndpoints>(
     name: T,
     param: Parameters<MilkyRawEndpoints[T]>[0],
     override?: MilkyFetchOptions,
-  ) => Promise<ReturnType<MilkyRawEndpoints[T]>>
+  ): Promise<ReturnType<MilkyRawEndpoints[T]>>
+}
 
 interface MilkyApiResponse<T> {
   status: 'ok' | 'failed'

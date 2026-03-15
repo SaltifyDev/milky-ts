@@ -5,7 +5,9 @@ import { clientEndpointNames } from '@/gen/types'
 
 function createProxy(fetch: MilkyFetch): any {
   const cachedEndpoints = new Map<keyof MilkyClientEndpointNames, any>()
-  return new Proxy(fetch, {
+  return new Proxy({
+    fetch,
+  }, {
     get(target, prop) {
       if (!Object.hasOwn(clientEndpointNames, prop)) {
         return Reflect.get(target, prop)
@@ -44,16 +46,19 @@ function createProxy(fetch: MilkyFetch): any {
       cachedEndpoints.set(prop as keyof MilkyClientEndpointNames, methods)
       return methods
     },
+    set() {
+      return false
+    },
   })
 }
 
-export type MilkyClient = MilkyFetch & {
-  [K in keyof MilkyClientEndpointNames]: {
-    [M in keyof MilkyClientEndpointNames[K]]:
+export type MilkyClient = {
+  readonly fetch: MilkyFetch
+} & {
+  readonly [K in keyof MilkyClientEndpointNames]: {
+    readonly [M in keyof MilkyClientEndpointNames[K]]:
     MilkyClientEndpointNames[K][M] extends infer K extends keyof MilkyRawEndpoints
-      ? Parameters<MilkyRawEndpoints[K]>[0] & {} extends never
-        ? (param?: null | undefined, options?: MilkyFetchOptions) => Promise<ReturnType<MilkyRawEndpoints[K]>>
-        : (param: Parameters<MilkyRawEndpoints[K]>[0], options?: MilkyFetchOptions) => Promise<ReturnType<MilkyRawEndpoints[K]>>
+      ? (...params: [...Parameters<MilkyRawEndpoints[K]>, override?: MilkyFetchOptions]) => Promise<ReturnType<MilkyRawEndpoints[K]>>
       : never
   } & {
     readonly name: K
@@ -61,7 +66,5 @@ export type MilkyClient = MilkyFetch & {
 } & {}
 
 export function createMilkyClient(options: MilkyFetchCreateOptions): MilkyClient {
-  const fetch = createMilkyFetch(options)
-
-  return createProxy(fetch)
+  return createProxy(createMilkyFetch(options))
 }

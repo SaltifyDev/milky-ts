@@ -64,4 +64,6 @@ chunks.push(`export const milkyProto: Record<string, [z.ZodTypeAny, z.ZodTypeAny
 chunks.push(...zodStructsFields)
 chunks.push(`}`)
 
+chunks.push(`export { ${commonStructNames.join(', ')} } from '@saltify/milky-types'`)
+
 writeFileSync('./src/gen/proto.ts', chunks.join('\n'))
