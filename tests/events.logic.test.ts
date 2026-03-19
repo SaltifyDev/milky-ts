@@ -69,17 +69,20 @@ it('guards controller operations after closure and only settles terminations onc
 })
 
 it('dispatches unreported sse termination errors from reconnect loops', async () => {
-  const { createMilkyEventSource, MilkyEventSourceImpl } = await loadEventsWithMock(async () => ({
-    kind: 'sse',
-    source: new MilkyEventSourceImpl(),
-    // eslint-disable-next-line ts/no-use-before-define
-    termination: termination.promise,
-  }))
+  const connected = createDeferred<void>()
   const termination = createDeferred<{
     type: 'error'
     error: Error
     reported: false
   }>()
+  const { createMilkyEventSource, MilkyEventSourceImpl } = await loadEventsWithMock(async () => {
+    connected.resolve()
+    return {
+      kind: 'sse',
+      source: new MilkyEventSourceImpl(),
+      termination: termination.promise,
+    }
+  })
 
   const source = await createMilkyEventSource(() => new FakeWebSocket() as never, {
     reconnect: {
@@ -88,14 +91,21 @@ it('dispatches unreported sse termination errors from reconnect loops', async ()
     },
   })
 
-  const error = onceEvent<ErrorEvent>(source, 'error')
+  await connected.promise
+
+  let errorMessage: string | undefined
+  source.addEventListener('error', (event) => {
+    errorMessage = (event as ErrorEvent).message
+  }, { once: true })
+
   termination.resolve({
     type: 'error',
     error: new Error('sse failed'),
     reported: false,
   })
 
-  expect((await error).message).toBe('sse failed')
+  await waitFor(() => errorMessage != null)
+  expect(errorMessage).toBe('sse failed')
   await waitFor(() => source.readyState === source.CLOSED)
 })
 
