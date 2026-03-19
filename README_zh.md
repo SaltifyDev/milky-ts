@@ -1,25 +1,25 @@
 # @saltify/milky-tea
 
-[简体中文](./README_zh.md)
+[English](./README.md)
 
 [![CI](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FSaltifyDev%2Fmilky-ts%2Fbadges%2Fcoverage-badge.json)](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml)
 
-Type-safe JavaScript SDK for the Milky Protocol. It provides typed API groups, runtime request/response validation, and realtime event subscriptions over WebSocket or SSE.
+Milky Protocol 的类型安全 JavaScript SDK，提供分组 API、基于运行时校验的请求/响应处理，以及基于 WebSocket 或 SSE 的实时事件订阅。
 
-## Installation
+## 安装
 
 ```bash
 pnpm add @saltify/milky-tea
 ```
 
-If your runtime does not provide a native `EventSource` and you want SSE support, install the optional peer dependency:
+如果运行时没有原生 `EventSource`，但你需要 SSE 支持，请额外安装可选 peer 依赖：
 
 ```bash
 pnpm add eventsource
 ```
 
-## Quick Start
+## 快速开始
 
 ```ts
 import { createMilkyClient } from '@saltify/milky-tea'
@@ -36,7 +36,7 @@ console.log(login.nickname)
 console.log(friend.friend.nickname)
 ```
 
-`createMilkyClient` groups endpoints under `system`, `message`, `friend`, `group`, and `file`. Every method also accepts an optional per-request override as the last argument.
+`createMilkyClient` 会把接口分到 `system`、`message`、`friend`、`group`、`file` 五个分组下。每个方法的最后一个参数还可以传入单次请求覆盖配置。
 
 ```ts
 await client.group.quitGroup(
@@ -45,15 +45,15 @@ await client.group.quitGroup(
 )
 ```
 
-## Core APIs
+## 核心 API
 
 ### `createMilkyClient`
 
-Use the high-level client when you want grouped, typed endpoints and shared defaults such as `baseURL`, `token`, `timeout`, custom headers, or a custom `fetch` implementation.
+高层客户端入口。适合统一配置 `baseURL`、`token`、`timeout`、自定义请求头或自定义 `fetch` 实现，并通过分组后的类型化方法调用接口。
 
 ### `createMilkyFetch`
 
-Use the lower-level fetch wrapper when you want to call raw endpoint names directly.
+底层请求封装。适合按原始 endpoint 名称直接调用。
 
 ```ts
 import { createMilkyFetch } from '@saltify/milky-tea'
@@ -68,7 +68,7 @@ console.log(login.uin)
 
 ### `createMilkyEventSource`
 
-Use event streams for realtime updates from the root package export. If you already use the client wrapper, call it through `client.event(...)`.
+实时事件入口，直接从根导出使用即可。如果你已经在使用客户端封装，也可以直接通过 `client.event(...)` 调用。
 
 ```ts
 import { createMilkyClient } from '@saltify/milky-tea'
@@ -100,22 +100,22 @@ source.addEventListener('error', (event) => {
 source.close()
 ```
 
-Connection modes:
+连接模式：
 
-- `auto`: try WebSocket first, then fall back to SSE before the socket opens
-- `websocket`: WebSocket only
-- `sse`: Server-Sent Events only
+- `auto`：优先 WebSocket，若在建立成功前失败则回退到 SSE
+- `websocket`：仅使用 WebSocket
+- `sse`：仅使用 Server-Sent Events
 
-## Runtime Notes
+## 运行时说明
 
-- Requests are sent as JSON `POST` calls to `${baseURL}/api/{endpoint}`.
-- Params and responses are validated against generated schemas from `@saltify/milky-types`.
-- `createMilkyFetch` uses `globalThis.fetch` by default. If your runtime does not provide it, pass `fetch` explicitly.
-- Request timeout defaults to `30000ms`. Set `timeout: false` to disable it for a specific request.
-- Event connection timeout defaults to `15000ms`.
-- SSE authentication is sent as the `token` query parameter.
+- 所有请求都会以 JSON `POST` 发送到 `${baseURL}/api/{endpoint}`。
+- 入参与响应都会按 `@saltify/milky-types` 生成的 schema 做运行时校验。
+- `createMilkyFetch` 默认使用 `globalThis.fetch`；如果运行时没有提供，需要手动传入 `fetch`。
+- 请求超时时间默认是 `30000ms`，可通过 `timeout: false` 为单次请求关闭。
+- 事件连接超时时间默认是 `15000ms`。
+- SSE 鉴权会通过 `token` 查询参数附加到事件地址上。
 
-## Development
+## 开发
 
 ```bash
 pnpm install

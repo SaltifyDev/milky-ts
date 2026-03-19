@@ -7,7 +7,6 @@
   "license": "MIT",
   "exports": {
     ".": "./dist/index.mjs",
-    "./events": "./dist/events/index.mjs",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",

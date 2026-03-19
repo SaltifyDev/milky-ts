@@ -13,7 +13,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts'],
       exclude: ['src/gen/**', 'src/index.ts', 'src/client/index.ts'],
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'json-summary'],
       thresholds: {
         branches: 90,
         functions: 90,
