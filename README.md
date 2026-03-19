@@ -1,25 +1,27 @@
 # @saltify/milky-tea
 
-[简体中文](./README_zh.md)
-
 [![CI](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FSaltifyDev%2Fmilky-ts%2Fbadges%2Fcoverage-badge.json)](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml)
 
-Type-safe JavaScript SDK for the Milky Protocol. It provides typed API groups, runtime request/response validation, and realtime event subscriptions over WebSocket or SSE.
+Milky 的 TypeScript SDK，提供类型安全的 API 调用和事件流支持。
 
-## Installation
-
-```bash
-pnpm add @saltify/milky-tea
-```
-
-If your runtime does not provide a native `EventSource` and you want SSE support, install the optional peer dependency:
+## 安装
 
 ```bash
-pnpm add eventsource
+npm i @saltify/milky-tea
 ```
 
-## Quick Start
+如果运行环境不支持 EventSource（例如 Node.js 环境）且需要 SSE 支持，则需要安装 `eventsource`：
+
+```bash
+npm i eventsource
+```
+
+## 使用方法
+
+### 调用 API
+
+下面是一个使用 `createMilkyClient` 创建客户端并调用 API 的示例：
 
 ```ts
 import { createMilkyClient } from '@saltify/milky-tea'
@@ -36,7 +38,7 @@ console.log(login.nickname)
 console.log(friend.friend.nickname)
 ```
 
-`createMilkyClient` groups endpoints under `system`, `message`, `friend`, `group`, and `file`. Every method also accepts an optional per-request override as the last argument.
+通过 `createMilkyClient` 创建一个客户端实例，传入 `baseURL` 和 `token`，之后就可以通过 `client.{category}.{endpoint}(params)` 的方式调用 API 了。例如，调用 `quit_group` API：
 
 ```ts
 await client.group.quitGroup(
@@ -45,39 +47,17 @@ await client.group.quitGroup(
 )
 ```
 
-## Core APIs
+在这里，第二个参数是可选的，可以覆盖默认的 `baseURL`、`token`、`timeout` 等设置。
 
-### `createMilkyClient`
+### 监听事件
 
-Use the high-level client when you want grouped, typed endpoints and shared defaults such as `baseURL`, `token`, `timeout`, custom headers, or a custom `fetch` implementation.
+通过 `client.event()` 创建一个事件连接，支持 WebSocket 和 SSE 两种连接方式。连接模式有如下几种：
 
-### `createMilkyFetch`
-
-Use the lower-level fetch wrapper when you want to call raw endpoint names directly.
-
-```ts
-import { createMilkyFetch } from '@saltify/milky-tea'
-
-const milkyFetch = createMilkyFetch({
-  baseURL: 'https://milky.example.com',
-})
-
-const login = await milkyFetch('get_login_info', undefined)
-console.log(login.uin)
-```
-
-### `createMilkyEventSource`
-
-Use event streams for realtime updates from the root package export. If you already use the client wrapper, call it through `client.event(...)`.
+- `auto`：首先尝试 WebSocket，如果在连接打开之前失败，则回退到 SSE
+- `websocket`：仅使用 WebSocket
+- `sse`：仅使用 Server-Sent Events
 
 ```ts
-import { createMilkyClient } from '@saltify/milky-tea'
-
-const client = createMilkyClient({
-  baseURL: 'https://milky.example.com',
-  token: process.env.MILKY_TOKEN,
-})
-
 const source = await client.event('auto', {
   reconnect: {
     interval: 1000,
@@ -100,22 +80,22 @@ source.addEventListener('error', (event) => {
 source.close()
 ```
 
-Connection modes:
+### `createMilkyFetch`
 
-- `auto`: try WebSocket first, then fall back to SSE before the socket opens
-- `websocket`: WebSocket only
-- `sse`: Server-Sent Events only
+`createMilkyFetch` 提供了一个更底层的 fetch 封装，允许直接调用原始的 API endpoint。
 
-## Runtime Notes
+```ts
+import { createMilkyFetch } from '@saltify/milky-tea'
 
-- Requests are sent as JSON `POST` calls to `${baseURL}/api/{endpoint}`.
-- Params and responses are validated against generated schemas from `@saltify/milky-types`.
-- `createMilkyFetch` uses `globalThis.fetch` by default. If your runtime does not provide it, pass `fetch` explicitly.
-- Request timeout defaults to `30000ms`. Set `timeout: false` to disable it for a specific request.
-- Event connection timeout defaults to `15000ms`.
-- SSE authentication is sent as the `token` query parameter.
+const milkyFetch = createMilkyFetch({
+  baseURL: 'https://milky.example.com',
+})
 
-## Development
+const login = await milkyFetch('get_login_info', undefined)
+console.log(login.uin)
+```
+
+## 开发
 
 ```bash
 pnpm install
