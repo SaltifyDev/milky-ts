@@ -19,10 +19,19 @@
     "dev": "tsdown --watch",
     "generate-api": "jiti ./scripts/generate-api.ts",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm run build",
     "fmt": "eslint . --fix",
     "prepare": "pnpm run generate-api"
+  },
+  "peerDependencies": {
+    "eventsource": "^4.1.0"
+  },
+  "peerDependenciesMeta": {
+    "eventsource": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@saltify/milky-types": "1.2.0-rc.4",
@@ -32,9 +41,11 @@
   "devDependencies": {
     "@antfu/eslint-config": "^7.7.2",
     "@typescript/native-preview": "7.0.0-dev.20260309.1",
+    "@vitest/coverage-v8": "^4.1.0",
     "bumpp": "^10.4.1",
     "change-case": "^5.4.4",
     "eslint": "^10.0.3",
+    "eventsource": "^4.1.0",
     "jiti": "^2.6.1",
     "tsdown": "^0.21.1",
     "typescript": "^5.9.3",
