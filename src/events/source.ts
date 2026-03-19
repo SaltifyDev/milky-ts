@@ -17,6 +17,15 @@ export interface MilkyEventSourceConnection {
   readonly termination: Promise<MilkyEventSourceTermination>
 }
 
+function dispatchDeferredOpen(controller: MilkyEventSourceController): void {
+  controller.source.readyState = controller.source.OPEN
+
+  // Defer synthetic open so callers awaiting source creation can still subscribe.
+  setTimeout(() => {
+    controller.dispatchOpen()
+  }, 0)
+}
+
 function createTransportConnection(
   kind: MilkyResolvedEventSourceConnectionKind,
   setup: (controller: MilkyEventSourceController, finish: MilkyEventSourceTerminate<MilkyEventSourceTermination>) => void,
@@ -87,7 +96,7 @@ export async function connectWebSocket(source: WebSocket): Promise<MilkyEventSou
     source.addEventListener('close', onClose, { once: true })
 
     if (source.readyState === source.OPEN) {
-      queueMicrotask(() => controller.dispatchOpen())
+      dispatchDeferredOpen(controller)
     }
 
     if (source.readyState === source.CLOSED) {
@@ -149,7 +158,7 @@ export async function connectEventSource(source: EventSource): Promise<MilkyEven
     source.addEventListener('error', onError)
 
     if (source.readyState === source.OPEN) {
-      queueMicrotask(() => controller.dispatchOpen())
+      dispatchDeferredOpen(controller)
     }
   })
 }

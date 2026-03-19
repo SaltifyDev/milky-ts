@@ -47,10 +47,30 @@ it('dispatches open for already-open websocket transports', async () => {
 
   const connection = await connectWebSocket(socket as unknown as WebSocket)
 
-  await sleep(0)
+  await expect(Promise.race([
+    onceEvent(connection.source, 'open'),
+    sleep(20).then(() => null),
+  ])).resolves.toBeInstanceOf(Event)
   expect(connection.source.readyState).toBe(connection.source.OPEN)
 
   connection.source.close()
+})
+
+it('dispatches open for already-open websocket sources created by milky', async () => {
+  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+
+  const socket = new FakeWebSocket()
+  socket.readyState = socket.OPEN
+
+  const source = await createMilkyEventSource(() => socket as unknown as WebSocket)
+
+  await expect(Promise.race([
+    onceEvent(source, 'open'),
+    sleep(20).then(() => null),
+  ])).resolves.toBeInstanceOf(Event)
+  expect(source.readyState).toBe(source.OPEN)
+
+  source.close()
 })
 
 it('does not close websocket transports that are already closing', async () => {
