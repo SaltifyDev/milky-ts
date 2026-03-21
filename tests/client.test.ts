@@ -4,6 +4,7 @@ import type { MilkyEventSourceOptions } from '@/events'
 import type { MilkyEventSourceConnectionKind } from '@/events/source'
 import { afterEach, expect, expectTypeOf, it, vi } from 'vitest'
 import { createMilkyClient } from '@/client/endpoint'
+import { waitFor } from './helpers/async'
 import { FakeEventSource, FakeWebSocket } from './helpers/transports'
 
 const { fallbackEventSourceUrls } = vi.hoisted(() => ({
@@ -144,7 +145,8 @@ it('adds token query when creating sse event urls', async () => {
 
   const source = await client.event('sse')
 
-  expect(urls).toEqual(['https://example.com/events?token=root-token'])
+  await waitFor(() => urls.length === 1)
+  expect(urls).toEqual(['https://example.com/event?token=root-token'])
 
   source.close()
 })
@@ -169,7 +171,8 @@ it('allows per-event token overrides when creating sse event urls', async () => 
     token: 'event-token',
   })
 
-  expect(urls).toEqual(['https://example.com/events?token=event-token'])
+  await waitFor(() => urls.length === 1)
+  expect(urls).toEqual(['https://example.com/event?token=event-token'])
 
   source.close()
 })
@@ -192,7 +195,8 @@ it('adds token query when creating websocket event urls', async () => {
 
   const source = await client.event('websocket')
 
-  expect(urls).toEqual(['https://example.com/events?token=root-token'])
+  await waitFor(() => urls.length === 1)
+  expect(urls).toEqual(['https://example.com/event?token=root-token'])
 
   source.close()
 })
@@ -231,8 +235,9 @@ it('forwards auto event configuration through the client wrapper', async () => {
     reconnect: false,
   })
 
-  expect(websocketUrls).toEqual(['https://example.com/events?token=event-token'])
-  expect(sseUrls).toEqual(['https://example.com/events?token=event-token'])
+  await waitFor(() => websocketUrls.length === 1 && sseUrls.length === 1)
+  expect(websocketUrls).toEqual(['https://example.com/event?token=event-token'])
+  expect(sseUrls).toEqual(['https://example.com/event?token=event-token'])
 
   source.close()
 })
@@ -248,7 +253,8 @@ it('falls back to peer eventsource when global EventSource is unavailable', asyn
 
   const source = await client.event('sse')
 
-  expect(fallbackEventSourceUrls).toEqual(['https://example.com/events?token=root-token'])
+  await waitFor(() => fallbackEventSourceUrls.length === 1)
+  expect(fallbackEventSourceUrls).toEqual(['https://example.com/event?token=root-token'])
 
   source.close()
 })

@@ -145,15 +145,20 @@ function createDisconnectError(): Error {
   return new Error('milky: event source disconnected')
 }
 
-export async function createMilkyEventSource(factory: MilkyEventSourceTransportFactory, options?: MilkyEventSourceOptions): Promise<MilkyEventSource>
-export async function createMilkyEventSource(
+type MilkyEventSourceRunResult = 'retry' | 'stop'
+
+export function createMilkyEventSource(
+  factory: MilkyEventSourceTransportFactory,
+  options?: MilkyEventSourceOptions,
+): MilkyEventSource
+export function createMilkyEventSource(
   kind: MilkyEventSourceConnectionKind,
   options: MilkyEventSourceCreateOptions,
-): Promise<MilkyEventSource>
-export async function createMilkyEventSource(
+): MilkyEventSource
+export function createMilkyEventSource(
   kindOrFactory: MilkyEventSourceConnectionKind | MilkyEventSourceTransportFactory,
   options?: MilkyEventSourceCreateOptions | MilkyEventSourceOptions,
-): Promise<MilkyEventSource> {
+): MilkyEventSource {
   if (typeof kindOrFactory !== 'function' && (options == null || !('baseURL' in options))) {
     throw new TypeError('milky: baseURL is required when creating event sources by kind')
   }
@@ -193,10 +198,6 @@ export async function createMilkyEventSource(
     }
   }
 
-  if (!reconnect) {
-    return (await connect()).source
-  }
-
   const controller = new AbortController()
   const { signal } = controller
   let currentConnection: MilkyEventSourceConnection | undefined
@@ -209,82 +210,107 @@ export async function createMilkyEventSource(
     })
   })
 
-  void (async () => {
-    let attempts = 0
+  async function forwardConnection(connection: MilkyEventSourceConnection) {
+    const stopForwarding = controllerState.forwardFrom(connection.source)
+    try {
+      return await connection.termination
+    }
+    finally {
+      stopForwarding()
+    }
+  }
 
-    while (!signal.aborted) {
-      let connection: MilkyEventSourceConnection | undefined
+  async function runConnection(): Promise<MilkyEventSourceRunResult> {
+    let connection: MilkyEventSourceConnection | undefined
 
-      try {
-        connection = await connect(signal)
-        currentConnection = connection
-
-        if (signal.aborted) {
-          connection.source.close()
-          break
-        }
-
-        if (connection.kind === 'sse') {
-          const stopForwarding = controllerState.forwardFrom(connection.source)
-          const termination = await connection.termination
-          stopForwarding()
-          currentConnection = undefined
-
-          if (termination.type === 'error' && !termination.reported) {
-            controllerState.dispatchError(termination.error)
-          }
-
-          break
-        }
-
-        const stopForwarding = controllerState.forwardFrom(connection.source)
-        const termination = await connection.termination
-        stopForwarding()
-        currentConnection = undefined
-
-        if (signal.aborted || termination.type === 'closed') {
-          break
-        }
-
-        controllerState.markConnecting()
-
-        if (termination.type === 'ended') {
-          controllerState.dispatchError(createDisconnectError())
-        }
-        else if (!termination.reported) {
-          controllerState.dispatchError(termination.error)
-        }
-      }
-      catch (error) {
-        currentConnection = undefined
-
-        if (signal.aborted) {
-          break
-        }
-
-        controllerState.markConnecting()
-        controllerState.dispatchError(error)
-      }
+    try {
+      connection = await connect(signal)
+      currentConnection = connection
 
       if (signal.aborted) {
-        break
+        connection.source.close()
+        return 'stop'
       }
 
-      if (reconnect.attempts !== 'always' && attempts >= reconnect.attempts) {
-        break
+      const termination = await forwardConnection(connection)
+      currentConnection = undefined
+
+      if (signal.aborted || termination.type === 'closed') {
+        return 'stop'
       }
 
-      attempts += 1
+      if (connection.kind === 'sse') {
+        if (termination.type === 'error' && !termination.reported) {
+          controllerState.dispatchError(termination.error)
+        }
 
-      try {
-        await sleepWithAbort(signal, reconnect.interval)
+        return 'stop'
       }
-      catch {
-        break
+
+      if (reconnect) {
+        controllerState.markConnecting()
+      }
+
+      if (termination.type === 'ended') {
+        controllerState.dispatchError(createDisconnectError())
+      }
+      else if (!termination.reported) {
+        controllerState.dispatchError(termination.error)
+      }
+
+      return reconnect ? 'retry' : 'stop'
+    }
+    catch (error) {
+      currentConnection = undefined
+
+      if (signal.aborted) {
+        return 'stop'
+      }
+
+      if (reconnect) {
+        controllerState.markConnecting()
+      }
+
+      controllerState.dispatchError(error)
+      return reconnect ? 'retry' : 'stop'
+    }
+  }
+
+  void (async () => {
+    try {
+      if (!reconnect) {
+        await runConnection()
+        return
+      }
+
+      let attempts = 0
+
+      while (!signal.aborted) {
+        if (await runConnection() === 'stop') {
+          break
+        }
+
+        if (signal.aborted) {
+          break
+        }
+
+        if (reconnect.attempts !== 'always' && attempts >= reconnect.attempts) {
+          break
+        }
+
+        attempts += 1
+
+        try {
+          await sleepWithAbort(signal, reconnect.interval)
+        }
+        catch {
+          break
+        }
       }
     }
-
-    controllerState.markClosed()
+    finally {
+      controllerState.markClosed()
+    }
   })()
 
   return emitter

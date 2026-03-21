@@ -2,6 +2,9 @@
 
 import type { Event as MilkyEvent } from '@/gen/proto'
 
+const subscribeClose = Symbol('MilkyEventSourceImpl.subscribeClose')
+const finishAsyncIteration = Symbol('MilkyEventSourceImpl.finishAsyncIteration')
+
 // eslint-disable-next-line ts/consistent-type-definitions
 export type MilkyEventSourceEventMap = {
   error: ErrorEvent
@@ -9,7 +12,7 @@ export type MilkyEventSourceEventMap = {
   open: Event
 }
 
-export interface MilkyEventSource extends EventTarget {
+export interface MilkyEventSource extends EventTarget, AsyncIterable<MilkyEventSourceEventMap['message']> {
   addEventListener<K extends keyof MilkyEventSourceEventMap>(
     type: K,
     listener: (this: MilkyEventSource, ev: MilkyEventSourceEventMap[K]) => any,
@@ -38,6 +41,7 @@ export interface MilkyEventSource extends EventTarget {
 
   close(): void
   [Symbol.dispose](): void
+  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEventSourceEventMap['message']>
 }
 
 export interface MilkyEventSourceTerminate<Result> {
@@ -80,8 +84,13 @@ export class MilkyEventSourceController {
   }
 
   markClosed(): void {
+    if (this.closed) {
+      return
+    }
+
     this.closed = true
     this.source.readyState = this.source.CLOSED
+    this.source[finishAsyncIteration]()
   }
 
   dispatchOpen(): void {
@@ -149,6 +158,8 @@ export class MilkyEventSourceController {
 }
 
 export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSource {
+  #closeListeners = new Set<() => void>()
+
   readonly CONNECTING = 0
   readonly OPEN = 1
   readonly CLOSED = 2
@@ -171,5 +182,107 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
 
   [Symbol.dispose](): void {
     this.close()
+  }
+
+  [subscribeClose](listener: () => void): () => void {
+    if (this.readyState === this.CLOSED) {
+      listener()
+      return () => {}
+    }
+
+    this.#closeListeners.add(listener)
+    return () => {
+      this.#closeListeners.delete(listener)
+    }
+  }
+
+  [finishAsyncIteration](): void {
+    const listeners = [...this.#closeListeners]
+    this.#closeListeners.clear()
+    for (const listener of listeners) {
+      listener()
+    }
+  }
+
+  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEventSourceEventMap['message']> {
+    const queue: MilkyEventSourceEventMap['message'][] = []
+    const deferreds: Array<(result: IteratorResult<MilkyEventSourceEventMap['message']>) => void> = []
+    let done = this.readyState === this.CLOSED
+    let unsubscribeClose = () => {}
+
+    const cleanup = () => {
+      // eslint-disable-next-line ts/no-use-before-define
+      this.removeEventListener('message', onMessage)
+      unsubscribeClose()
+    }
+
+    const finish = () => {
+      if (done) {
+        return
+      }
+
+      done = true
+      cleanup()
+      while (deferreds.length > 0) {
+        deferreds.shift()!({
+          done: true,
+          value: undefined,
+        })
+      }
+    }
+
+    const onMessage = (event: Event) => {
+      if (done) {
+        return
+      }
+
+      const message = event as MilkyEventSourceEventMap['message']
+      const deferred = deferreds.shift()
+      if (deferred) {
+        deferred({
+          done: false,
+          value: message,
+        })
+        return
+      }
+
+      queue.push(message)
+    }
+
+    if (!done) {
+      this.addEventListener('message', onMessage)
+      unsubscribeClose = this[subscribeClose](finish)
+    }
+
+    return {
+      next: async () => {
+        const message = queue.shift()
+        if (message) {
+          return {
+            done: false,
+            value: message,
+          }
+        }
+
+        if (done) {
+          return {
+            done: true,
+            value: undefined,
+          }
+        }
+
+        return await new Promise(resolve => deferreds.push(resolve))
+      },
+      return: async () => {
+        finish()
+        return {
+          done: true,
+          value: undefined,
+        }
+      },
+      [Symbol.asyncIterator]() {
+        return this
+      },
+    }
   }
 }

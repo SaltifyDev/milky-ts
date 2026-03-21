@@ -147,7 +147,7 @@ it('rejects unknown event transport values', async () => {
 })
 
 it('requires baseURL when creating event sources by kind', async () => {
-  await expect(createMilkyEventSource('sse', undefined as never)).rejects.toThrow('milky: baseURL is required when creating event sources by kind')
+  expect(() => createMilkyEventSource('sse', undefined as never)).toThrow('milky: baseURL is required when creating event sources by kind')
 })
 
 it('aborts timed out connection attempts and closes transports that resolve later', async () => {
@@ -167,7 +167,11 @@ it('aborts timed out connection attempts and closes transports that resolve late
     timeout: 5,
   })
 
-  await expect(pending).rejects.toThrow('milky: timed out after 5ms')
+  const error = onceEvent<ErrorEvent>(pending, 'error')
+  await expect(error).resolves.toMatchObject({
+    message: 'milky: timed out after 5ms',
+  })
+  await waitFor(() => pending.readyState === pending.CLOSED)
 
   deferred.resolve(socket as unknown as WebSocket)
   await sleep(10)
@@ -291,20 +295,23 @@ it('creates websocket transports from kind and options overload', async () => {
     token: 'event-token',
   })
 
-  expect(urls).toEqual(['https://example.com/events?token=event-token'])
+  await waitFor(() => urls.length === 1)
+  expect(urls).toEqual(['https://example.com/event?token=event-token'])
 
   source.close()
   expect(source.readyState).toBe(source.CLOSED)
 })
 
 it('closes sources through Symbol.dispose', async () => {
+  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+
   const socket = new FakeWebSocket()
   const source = await createMilkyEventSource(() => socket as unknown as WebSocket)
 
   source[Symbol.dispose]()
 
   expect(source.readyState).toBe(source.CLOSED)
-  expect(socket.closeCalls).toBe(1)
+  await waitFor(() => socket.closeCalls === 1)
 })
 
 it('falls back from auto websocket to sse before open', async () => {
@@ -336,8 +343,9 @@ it('falls back from auto websocket to sse before open', async () => {
     token: 'event-token',
   })
 
-  expect(websocketUrls).toEqual(['https://example.com/events?token=event-token'])
-  expect(sseUrls).toEqual(['https://example.com/events?token=event-token'])
+  await waitFor(() => websocketUrls.length === 1 && sseUrls.length === 1)
+  expect(websocketUrls).toEqual(['https://example.com/event?token=event-token'])
+  expect(sseUrls).toEqual(['https://example.com/event?token=event-token'])
 
   const message = onceEvent<MessageEvent>(source, 'message')
   eventSources[0]!.open()
@@ -372,7 +380,8 @@ it('falls back from auto to sse when websocket construction throws', async () =>
     token: 'event-token',
   })
 
-  expect(sseUrls).toEqual(['https://example.com/events?token=event-token'])
+  await waitFor(() => sseUrls.length === 1)
+  expect(sseUrls).toEqual(['https://example.com/event?token=event-token'])
 
   source.close()
 })

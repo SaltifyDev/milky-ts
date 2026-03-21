@@ -68,6 +68,70 @@ it('guards controller operations after closure and only settles terminations onc
   await expect(finish.promise).resolves.toBe('first')
 })
 
+it('iterates message events asynchronously and finishes when the source closes', async () => {
+  const { MilkyEventSourceImpl } = await import('@/events/internal')
+
+  const source = new MilkyEventSourceImpl()
+  const iterator = source[Symbol.asyncIterator]()
+
+  const firstMessage = iterator.next()
+  source.controller.dispatchMessage({ id: 1 } as never)
+
+  await expect(firstMessage).resolves.toMatchObject({
+    done: false,
+    value: {
+      data: { id: 1 },
+    },
+  })
+
+  const finished = iterator.next()
+  source.close()
+
+  await expect(finished).resolves.toMatchObject({
+    done: true,
+  })
+})
+
+it('exposes forwarded message events through async iteration', async () => {
+  const { createMilkyEventSource } = await import('@/events/index')
+  const originalWebSocket = globalThis.WebSocket
+
+  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+
+  try {
+    const socket = new FakeWebSocket()
+    const source = await createMilkyEventSource(() => socket as unknown as WebSocket)
+    const received: unknown[] = []
+
+    await sleep(0)
+
+    const consume = (async () => {
+      for await (const event of source) {
+        received.push(event.data)
+        if (received.length === 2) {
+          break
+        }
+      }
+    })()
+
+    socket.open()
+    socket.sendMessage({ id: 1 })
+    socket.sendMessage({ id: 2 })
+
+    await consume
+
+    expect(received).toEqual([
+      { id: 1 },
+      { id: 2 },
+    ])
+
+    source.close()
+  }
+  finally {
+    globalThis.WebSocket = originalWebSocket
+  }
+})
+
 it('dispatches unreported sse termination errors from reconnect loops', async () => {
   const connected = createDeferred<void>()
   const termination = createDeferred<{
@@ -145,8 +209,12 @@ it('stops reconnecting when websocket termination errors close the source from a
 })
 
 it('reports transport connection failures during reconnect loops', async () => {
-  const deferred = createDeferred<never>()
-  const { createMilkyEventSource } = await loadEventsWithMock(() => deferred.promise)
+  const connected = createDeferred<void>()
+  const { createMilkyEventSource } = await loadEventsWithMock(async () => {
+    connected.resolve()
+    await sleep(0)
+    throw new Error('connect failed')
+  })
 
   const source = await createMilkyEventSource(() => new FakeWebSocket() as never, {
     reconnect: {
@@ -155,8 +223,8 @@ it('reports transport connection failures during reconnect loops', async () => {
     },
   })
 
+  await connected.promise
   const error = onceEvent<ErrorEvent>(source, 'error')
-  deferred.reject(new Error('connect failed'))
 
   expect((await error).message).toBe('connect failed')
   await waitFor(() => source.readyState === source.CLOSED)
