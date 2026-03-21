@@ -1,5 +1,3 @@
-export type { Emitter as EventEmitter, WildcardHandler } from 'mitt'
-export { default as createEventEmitter } from 'mitt'
 export type Awaitable<T> = T | Promise<T>
 export type MaybeArray<T> = T | T[]
 

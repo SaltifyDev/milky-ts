@@ -89,11 +89,14 @@ import { createMilkyFetch } from '@saltify/milky-tea'
 
 const milkyFetch = createMilkyFetch({
   baseURL: 'https://milky.example.com',
+  strict: false,
 })
 
 const login = await milkyFetch('get_login_info', undefined)
 console.log(login.uin)
 ```
+
+`strict` 默认为 `true`。关闭后会跳过请求参数和响应数据的 zod 校验；也可以在单次请求的 override 里单独设置。
 
 ## 开发
 

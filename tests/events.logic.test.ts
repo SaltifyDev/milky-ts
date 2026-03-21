@@ -79,9 +79,7 @@ it('iterates message events asynchronously and finishes when the source closes',
 
   await expect(firstMessage).resolves.toMatchObject({
     done: false,
-    value: {
-      data: { id: 1 },
-    },
+    value: { id: 1 },
   })
 
   const finished = iterator.next()
@@ -106,8 +104,8 @@ it('exposes forwarded message events through async iteration', async () => {
     await sleep(0)
 
     const consume = (async () => {
-      for await (const event of source) {
-        received.push(event.data)
+      for await (const message of source) {
+        received.push(message)
         if (received.length === 2) {
           break
         }

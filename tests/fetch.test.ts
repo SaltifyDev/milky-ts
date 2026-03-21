@@ -195,6 +195,31 @@ it('throws when the endpoint name is unknown', async () => {
   expect(fetchMock).not.toHaveBeenCalled()
 })
 
+it('skips unknown endpoint checks when strict is disabled', async () => {
+  const fetchMock = vi.fn(async (request: Request) => {
+    expect(request.url).toBe('https://example.com/api/unknown_endpoint')
+
+    return createJsonResponse({
+      status: 'ok',
+      retcode: 0,
+      data: {
+        ok: true,
+      },
+    })
+  })
+
+  const milkyFetch = createMilkyFetch({
+    baseURL: 'https://example.com',
+    strict: false,
+    fetch: fetchMock,
+  })
+
+  await expect((milkyFetch as any)('unknown_endpoint', undefined)).resolves.toEqual({
+    ok: true,
+  })
+  expect(fetchMock).toHaveBeenCalledOnce()
+})
+
 it('validates request params before issuing the request', async () => {
   const fetchMock = vi.fn()
   const milkyFetch = createMilkyFetch({
@@ -204,6 +229,59 @@ it('validates request params before issuing the request', async () => {
 
   await expect(milkyFetch('get_friend_info', {} as never)).rejects.toThrow('milky: failed to validate params for get_friend_info')
   expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it('skips request and response validation when strict is disabled on the client', async () => {
+  const fetchMock = vi.fn(async (request: Request) => {
+    expect(await request.text()).toBe('{}')
+
+    return createJsonResponse({
+      status: 'ok',
+      retcode: 0,
+      data: {
+        uin: 'not-a-number',
+        nickname: 'bot',
+      },
+    })
+  })
+
+  const milkyFetch = createMilkyFetch({
+    baseURL: 'https://example.com',
+    strict: false,
+    fetch: fetchMock,
+  })
+
+  await expect(milkyFetch('get_friend_info', {} as never)).resolves.toEqual({
+    uin: 'not-a-number',
+    nickname: 'bot',
+  })
+  expect(fetchMock).toHaveBeenCalledOnce()
+})
+
+it('allows overriding strict per request', async () => {
+  const fetchMock = vi.fn(async () => createJsonResponse({
+    status: 'ok',
+    retcode: 0,
+    data: {
+      uin: 'not-a-number',
+      nickname: 'bot',
+    },
+  }))
+
+  const milkyFetch = createMilkyFetch({
+    baseURL: 'https://example.com',
+    strict: false,
+    fetch: fetchMock,
+  })
+
+  await expect(milkyFetch('get_login_info', undefined)).resolves.toEqual({
+    uin: 'not-a-number',
+    nickname: 'bot',
+  })
+  await expect(milkyFetch('get_login_info', undefined, {
+    strict: true,
+  })).rejects.toThrow('milky: failed to parse response for get_login_info')
+  expect(fetchMock).toHaveBeenCalledTimes(2)
 })
 
 it('throws API failures with server messages', async () => {

@@ -12,7 +12,7 @@ export type MilkyEventSourceEventMap = {
   open: Event
 }
 
-export interface MilkyEventSource extends EventTarget, AsyncIterable<MilkyEventSourceEventMap['message']> {
+export interface MilkyEventSource extends EventTarget, AsyncIterable<MilkyEvent> {
   addEventListener<K extends keyof MilkyEventSourceEventMap>(
     type: K,
     listener: (this: MilkyEventSource, ev: MilkyEventSourceEventMap[K]) => any,
@@ -41,7 +41,7 @@ export interface MilkyEventSource extends EventTarget, AsyncIterable<MilkyEventS
 
   close(): void
   [Symbol.dispose](): void
-  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEventSourceEventMap['message']>
+  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEvent>
 }
 
 export interface MilkyEventSourceTerminate<Result> {
@@ -204,9 +204,9 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
     }
   }
 
-  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEventSourceEventMap['message']> {
-    const queue: MilkyEventSourceEventMap['message'][] = []
-    const deferreds: Array<(result: IteratorResult<MilkyEventSourceEventMap['message']>) => void> = []
+  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEvent> {
+    const queue: MilkyEvent[] = []
+    const deferreds: Array<(result: IteratorResult<MilkyEvent>) => void> = []
     let done = this.readyState === this.CLOSED
     let unsubscribeClose = () => {}
 
@@ -241,12 +241,12 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
       if (deferred) {
         deferred({
           done: false,
-          value: message,
+          value: message.data,
         })
         return
       }
 
-      queue.push(message)
+      queue.push(message.data)
     }
 
     if (!done) {
