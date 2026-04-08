@@ -1,7 +1,7 @@
 # Milky Tea
 
-[![CI](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FSaltifyDev%2Fmilky-ts%2Fbadges%2Fcoverage-badge.json)](https://github.com/SaltifyDev/milky-ts/actions/workflows/ci.yml)
+[![CI](https://github.com/SaltifyDev/milky-tea/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SaltifyDev/milky-tea/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FSaltifyDev%2Fmilky-tea%2Fbadges%2Fcoverage-badge.json)](https://github.com/SaltifyDev/milky-tea/actions/workflows/ci.yml)
 
 Milky 的 TypeScript SDK，提供类型安全的 API 调用和事件流支持。
 
