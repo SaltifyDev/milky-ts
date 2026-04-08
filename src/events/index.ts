@@ -53,7 +53,7 @@ async function createTransportByKind(
   const url = joinURL(options.baseURL, '/event')
 
   if (options.token) {
-    url.searchParams.set('token', options.token)
+    url.searchParams.set('access_token', options.token)
   }
 
   switch (kind) {

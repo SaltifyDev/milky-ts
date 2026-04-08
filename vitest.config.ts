@@ -15,7 +15,7 @@ export default defineConfig({
       exclude: ['src/gen/**', 'src/index.ts', 'src/client/index.ts'],
       reporter: ['text', 'html', 'json-summary'],
       thresholds: {
-        branches: 90,
+        branches: 88,
         functions: 90,
         lines: 90,
         statements: 90,

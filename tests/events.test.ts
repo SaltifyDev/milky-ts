@@ -296,7 +296,7 @@ it('creates websocket transports from kind and options overload', async () => {
   })
 
   await waitFor(() => urls.length === 1)
-  expect(urls).toEqual(['https://example.com/event?token=event-token'])
+  expect(urls).toEqual(['https://example.com/event?access_token=event-token'])
 
   source.close()
   expect(source.readyState).toBe(source.CLOSED)
@@ -344,8 +344,8 @@ it('falls back from auto websocket to sse before open', async () => {
   })
 
   await waitFor(() => websocketUrls.length === 1 && sseUrls.length === 1)
-  expect(websocketUrls).toEqual(['https://example.com/event?token=event-token'])
-  expect(sseUrls).toEqual(['https://example.com/event?token=event-token'])
+  expect(websocketUrls).toEqual(['https://example.com/event?access_token=event-token'])
+  expect(sseUrls).toEqual(['https://example.com/event?access_token=event-token'])
 
   const message = onceEvent<MessageEvent>(source, 'message')
   eventSources[0]!.open()
@@ -381,7 +381,7 @@ it('falls back from auto to sse when websocket construction throws', async () =>
   })
 
   await waitFor(() => sseUrls.length === 1)
-  expect(sseUrls).toEqual(['https://example.com/event?token=event-token'])
+  expect(sseUrls).toEqual(['https://example.com/event?access_token=event-token'])
 
   source.close()
 })
