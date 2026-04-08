@@ -36,14 +36,14 @@ it('guards controller operations after closure and only settles terminations onc
 
   const closedSource = new MilkyEventSourceImpl()
   let openCount = 0
-  let messageCount = 0
+  let pushCount = 0
   let errorCount = 0
 
   closedSource.addEventListener('open', () => {
     openCount += 1
   })
-  closedSource.addEventListener('message', () => {
-    messageCount += 1
+  closedSource.addEventListener('push', () => {
+    pushCount += 1
   })
   closedSource.addEventListener('error', () => {
     errorCount += 1
@@ -56,7 +56,7 @@ it('guards controller operations after closure and only settles terminations onc
   closedSource.controller.dispatchError(new Error('late'))
 
   expect(openCount).toBe(0)
-  expect(messageCount).toBe(0)
+  expect(pushCount).toBe(0)
   expect(errorCount).toBe(0)
 
   const pendingSource = new MilkyEventSourceImpl()
@@ -68,18 +68,30 @@ it('guards controller operations after closure and only settles terminations onc
   await expect(finish.promise).resolves.toBe('first')
 })
 
-it('iterates message events asynchronously and finishes when the source closes', async () => {
+it('dispatches push events, typed events, and async iteration from the same payload', async () => {
   const { MilkyEventSourceImpl } = await import('@/events/internal')
 
   const source = new MilkyEventSourceImpl()
+  const payload = {
+    event_type: 'private_message_created',
+    id: 1,
+  } as never
   const iterator = source[Symbol.asyncIterator]()
 
+  const pushEvent = onceEvent(source, 'push')
+  const typedEvent = onceEvent(source, 'private_message_created')
   const firstMessage = iterator.next()
-  source.controller.dispatchMessage({ id: 1 } as never)
+  source.controller.dispatchMessage(payload)
 
+  await expect(pushEvent).resolves.toMatchObject({
+    event: payload,
+  })
+  await expect(typedEvent).resolves.toMatchObject({
+    event: payload,
+  })
   await expect(firstMessage).resolves.toMatchObject({
     done: false,
-    value: { id: 1 },
+    value: payload,
   })
 
   const finished = iterator.next()
@@ -100,6 +112,7 @@ it('exposes forwarded message events through async iteration', async () => {
     const socket = new FakeWebSocket()
     const source = await createMilkyEventSource(() => socket as unknown as WebSocket)
     const received: unknown[] = []
+    const pushEvents: unknown[] = []
 
     await sleep(0)
 
@@ -112,15 +125,23 @@ it('exposes forwarded message events through async iteration', async () => {
       }
     })()
 
+    source.addEventListener('push', (event) => {
+      pushEvents.push((event as { event: unknown }).event)
+    })
+
     socket.open()
-    socket.sendMessage({ id: 1 })
-    socket.sendMessage({ id: 2 })
+    socket.sendMessage({ event_type: 'private_message_created', id: 1 })
+    socket.sendMessage({ event_type: 'private_message_created', id: 2 })
 
     await consume
 
     expect(received).toEqual([
-      { id: 1 },
-      { id: 2 },
+      { event_type: 'private_message_created', id: 1 },
+      { event_type: 'private_message_created', id: 2 },
+    ])
+    expect(pushEvents).toEqual([
+      { event_type: 'private_message_created', id: 1 },
+      { event_type: 'private_message_created', id: 2 },
     ])
 
     source.close()

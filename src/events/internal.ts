@@ -8,8 +8,18 @@ const finishAsyncIteration = Symbol('MilkyEventSourceImpl.finishAsyncIteration')
 // eslint-disable-next-line ts/consistent-type-definitions
 export type MilkyEventSourceEventMap = {
   error: ErrorEvent
-  message: MessageEvent<MilkyEvent>
+  push: MilkyPushEvent<MilkyEvent>
   open: Event
+} & {
+  [P in MilkyEvent['event_type']]: MilkyPushEvent<Extract<MilkyEvent, { event_type: P }>>
+}
+
+export class MilkyPushEvent<T extends MilkyEvent> extends Event {
+  readonly event: T
+  constructor(event: T, type?: string) {
+    super(type ?? event.event_type as string)
+    this.event = event
+  }
 }
 
 export interface MilkyEventSource extends EventTarget, AsyncIterable<MilkyEvent> {
@@ -107,9 +117,13 @@ export class MilkyEventSourceController {
       return
     }
 
-    this.source.dispatchEvent(new MessageEvent('message', {
-      data: message,
-    }))
+    this.source.dispatchEvent(new MilkyPushEvent(message, 'push'))
+
+    if (this.closed) {
+      return
+    }
+
+    this.source.dispatchEvent(new MilkyPushEvent(message))
   }
 
   dispatchError(error: unknown): void {
@@ -128,8 +142,8 @@ export class MilkyEventSourceController {
       this.dispatchOpen()
     }
 
-    const onMessage = (event: MilkyEventSourceEventMap['message']) => {
-      this.dispatchMessage(event.data)
+    const onPush = (event: MilkyEventSourceEventMap['push']) => {
+      this.dispatchMessage(event.event)
     }
 
     const onError = (event: MilkyEventSourceEventMap['error']) => {
@@ -137,12 +151,12 @@ export class MilkyEventSourceController {
     }
 
     source.addEventListener('open', onOpen)
-    source.addEventListener('message', onMessage)
+    source.addEventListener('push', onPush)
     source.addEventListener('error', onError)
 
     return () => {
       source.removeEventListener('open', onOpen)
-      source.removeEventListener('message', onMessage)
+      source.removeEventListener('push', onPush)
       source.removeEventListener('error', onError)
     }
   }
@@ -212,7 +226,7 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
 
     const cleanup = () => {
       // eslint-disable-next-line ts/no-use-before-define
-      this.removeEventListener('message', onMessage)
+      this.removeEventListener('push', onPush)
       unsubscribeClose()
     }
 
@@ -231,26 +245,26 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
       }
     }
 
-    const onMessage = (event: Event) => {
+    const onPush = (event: Event) => {
       if (done) {
         return
       }
 
-      const message = event as MilkyEventSourceEventMap['message']
+      const message = (event as MilkyEventSourceEventMap['push']).event
       const deferred = deferreds.shift()
       if (deferred) {
         deferred({
           done: false,
-          value: message.data,
+          value: message,
         })
         return
       }
 
-      queue.push(message.data)
+      queue.push(message)
     }
 
     if (!done) {
-      this.addEventListener('message', onMessage)
+      this.addEventListener('push', onPush)
       unsubscribeClose = this[subscribeClose](finish)
     }
 

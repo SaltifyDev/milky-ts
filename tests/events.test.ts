@@ -13,20 +13,28 @@ afterEach(() => {
   vi.doUnmock('eventsource')
 })
 
-it('connects websocket transports and forwards messages and parse errors', async () => {
+it('connects websocket transports and forwards push and typed events plus parse errors', async () => {
   globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
 
   const socket = new FakeWebSocket()
   const connection = await connectWebSocket(socket as unknown as WebSocket)
+  const payload = {
+    event_type: 'private_message_created',
+    id: 1,
+  } as never
 
   const openEvent = onceEvent(connection.source, 'open')
   socket.open()
   await expect(openEvent).resolves.toBeInstanceOf(Event)
 
-  const messageEvent = onceEvent<MessageEvent>(connection.source, 'message')
-  socket.sendMessage({ id: 1 })
-  await expect(messageEvent).resolves.toMatchObject({
-    data: { id: 1 },
+  const pushEvent = onceEvent(connection.source, 'push')
+  const typedEvent = onceEvent(connection.source, 'private_message_created')
+  socket.sendMessage(payload)
+  await expect(pushEvent).resolves.toMatchObject({
+    event: payload,
+  })
+  await expect(typedEvent).resolves.toMatchObject({
+    event: payload,
   })
 
   const errorEvent = onceEvent<ErrorEvent>(connection.source, 'error')
@@ -93,15 +101,23 @@ it('connects event sources and reports terminal errors', async () => {
 
   const source = new FakeEventSource()
   const connection = await connectEventSource(source as unknown as EventSource)
+  const payload = {
+    event_type: 'private_message_created',
+    id: 2,
+  } as never
 
   const openEvent = onceEvent(connection.source, 'open')
   source.open()
   await expect(openEvent).resolves.toBeInstanceOf(Event)
 
-  const messageEvent = onceEvent<MessageEvent>(connection.source, 'message')
-  source.sendMessage({ id: 2 })
-  await expect(messageEvent).resolves.toMatchObject({
-    data: { id: 2 },
+  const pushEvent = onceEvent(connection.source, 'push')
+  const typedEvent = onceEvent(connection.source, 'private_message_created')
+  source.sendMessage(payload)
+  await expect(pushEvent).resolves.toMatchObject({
+    event: payload,
+  })
+  await expect(typedEvent).resolves.toMatchObject({
+    event: payload,
   })
 
   const parseError = onceEvent<ErrorEvent>(connection.source, 'error')
@@ -347,12 +363,20 @@ it('falls back from auto websocket to sse before open', async () => {
   expect(websocketUrls).toEqual(['https://example.com/event?access_token=event-token'])
   expect(sseUrls).toEqual(['https://example.com/event?access_token=event-token'])
 
-  const message = onceEvent<MessageEvent>(source, 'message')
+  const payload = {
+    event_type: 'private_message_created',
+    id: 3,
+  } as never
+  const pushEvent = onceEvent(source, 'push')
+  const typedEvent = onceEvent(source, 'private_message_created')
   eventSources[0]!.open()
-  eventSources[0]!.sendMessage({ id: 3 })
+  eventSources[0]!.sendMessage(payload)
 
-  await expect(message).resolves.toMatchObject({
-    data: { id: 3 },
+  await expect(pushEvent).resolves.toMatchObject({
+    event: payload,
+  })
+  await expect(typedEvent).resolves.toMatchObject({
+    event: payload,
   })
 
   source.close()
@@ -417,10 +441,18 @@ it('uses native EventSource reconnection behavior directly', async () => {
   expect(errorCount).toBe(1)
   expect(source.readyState).toBe(source.OPEN)
 
-  const message = onceEvent<MessageEvent>(source, 'message')
-  nativeSource.sendMessage({ id: 2 })
-  await expect(message).resolves.toMatchObject({
-    data: { id: 2 },
+  const payload = {
+    event_type: 'private_message_created',
+    id: 2,
+  } as never
+  const pushEvent = onceEvent(source, 'push')
+  const typedEvent = onceEvent(source, 'private_message_created')
+  nativeSource.sendMessage(payload)
+  await expect(pushEvent).resolves.toMatchObject({
+    event: payload,
+  })
+  await expect(typedEvent).resolves.toMatchObject({
+    event: payload,
   })
 
   source.close()
