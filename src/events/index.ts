@@ -90,8 +90,8 @@ async function waitForWebSocketOpen(
     }
 
     settled = true
-    connection.source.removeEventListener('open', onOpen)
-    connection.source.removeEventListener('error', onError)
+    connection.source.off('open', onOpen)
+    connection.source.off('error', onError)
     deferred.resolve(result)
   }
   const onOpen = () => {
@@ -101,8 +101,8 @@ async function waitForWebSocketOpen(
     finish(false)
   }
 
-  connection.source.addEventListener('open', onOpen, { once: true })
-  connection.source.addEventListener('error', onError, { once: true })
+  connection.source.on('open', onOpen)
+  connection.source.on('error', onError)
   void connection.termination.then(() => {
     finish(false)
   })

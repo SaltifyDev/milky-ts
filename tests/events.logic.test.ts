@@ -39,13 +39,13 @@ it('guards controller operations after closure and only settles terminations onc
   let pushCount = 0
   let errorCount = 0
 
-  closedSource.addEventListener('open', () => {
+  closedSource.on('open', () => {
     openCount += 1
   })
-  closedSource.addEventListener('push', () => {
+  closedSource.on('push', () => {
     pushCount += 1
   })
-  closedSource.addEventListener('error', () => {
+  closedSource.on('error', () => {
     errorCount += 1
   })
 
@@ -83,12 +83,8 @@ it('dispatches push events, typed events, and async iteration from the same payl
   const firstMessage = iterator.next()
   source.controller.dispatchMessage(payload)
 
-  await expect(pushEvent).resolves.toMatchObject({
-    event: payload,
-  })
-  await expect(typedEvent).resolves.toMatchObject({
-    event: payload,
-  })
+  await expect(pushEvent).resolves.toEqual(payload)
+  await expect(typedEvent).resolves.toEqual(payload)
   await expect(firstMessage).resolves.toMatchObject({
     done: false,
     value: payload,
@@ -100,6 +96,33 @@ it('dispatches push events, typed events, and async iteration from the same payl
   await expect(finished).resolves.toMatchObject({
     done: true,
   })
+})
+
+it('exposes mitt-style subscriptions with readonly push payloads', async () => {
+  const { MilkyEventSourceImpl } = await import('@/events/internal')
+
+  const source = new MilkyEventSourceImpl() as never as {
+    controller: InstanceType<typeof MilkyEventSourceImpl>['controller']
+    on: (type: string, handler: (event: unknown) => void) => void
+  }
+  const payload = {
+    event_type: 'private_message_created',
+    id: 1,
+  } as never
+  const received: unknown[] = []
+
+  expect(typeof source.on).toBe('function')
+
+  source.on('push', (event) => {
+    received.push(event)
+  })
+
+  source.controller.dispatchMessage(payload)
+
+  expect(received).toEqual([payload])
+
+  // Verify the object is deeply frozen (immutable)
+  expect(Object.isFrozen(received[0])).toBe(true)
 })
 
 it('exposes forwarded message events through async iteration', async () => {
@@ -125,8 +148,8 @@ it('exposes forwarded message events through async iteration', async () => {
       }
     })()
 
-    source.addEventListener('push', (event) => {
-      pushEvents.push((event as { event: unknown }).event)
+    source.on('push', (event) => {
+      pushEvents.push(event)
     })
 
     socket.open()
@@ -177,9 +200,11 @@ it('dispatches unreported sse termination errors from reconnect loops', async ()
   await connected.promise
 
   let errorMessage: string | undefined
-  source.addEventListener('error', (event) => {
-    errorMessage = (event as ErrorEvent).message
-  }, { once: true })
+  const onError = (event: ErrorEvent) => {
+    errorMessage = event.message
+    source.off('error', onError)
+  }
+  source.on('error', onError)
 
   termination.resolve({
     type: 'error',
@@ -212,10 +237,12 @@ it('stops reconnecting when websocket termination errors close the source from a
   })
 
   const errorMessages: string[] = []
-  source.addEventListener('error', (event) => {
-    errorMessages.push((event as ErrorEvent).message)
+  const onError = (event: ErrorEvent) => {
+    errorMessages.push(event.message)
     source.close()
-  }, { once: true })
+    source.off('error', onError)
+  }
+  source.on('error', onError)
 
   termination.resolve({
     type: 'error',

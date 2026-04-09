@@ -14,9 +14,20 @@ export async function waitFor(predicate: () => boolean, timeout = 100): Promise<
   }
 }
 
-export function onceEvent<T extends Event = Event>(target: EventTarget, type: string): Promise<T> {
+export function onceEvent<T = unknown>(
+  target: {
+    on: (type: string, listener: (event: T) => void) => void
+    off: (type: string, listener: (event: T) => void) => void
+  },
+  type: string,
+): Promise<T> {
   return new Promise((resolve) => {
-    target.addEventListener(type, event => resolve(event as T), { once: true })
+    const listener = (event: T) => {
+      target.off(type, listener)
+      resolve(event)
+    }
+
+    target.on(type, listener)
   })
 }
 

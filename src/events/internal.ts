@@ -1,47 +1,66 @@
 /* eslint-disable ts/method-signature-style */
 
 import type { Event as MilkyEvent } from '@/gen/proto'
+import mitt from 'mitt'
 
 const subscribeClose = Symbol('MilkyEventSourceImpl.subscribeClose')
 const finishAsyncIteration = Symbol('MilkyEventSourceImpl.finishAsyncIteration')
 
-// eslint-disable-next-line ts/consistent-type-definitions
+type DeepReadonly<T>
+  = T extends (...args: any[]) => unknown ? T
+    : T extends readonly (infer U)[] ? readonly DeepReadonly<U>[]
+      : T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+        : T
+
+function makeDeepReadonly<T>(value: T, seen = new WeakSet<object>()): DeepReadonly<T> {
+  if (value == null || typeof value !== 'object') {
+    return value as DeepReadonly<T>
+  }
+
+  if (seen.has(value)) {
+    return value as DeepReadonly<T>
+  }
+
+  seen.add(value)
+
+  // Recursively freeze nested objects
+  for (const nested of Object.values(value)) {
+    if (nested != null && typeof nested === 'object') {
+      makeDeepReadonly(nested, seen)
+    }
+  }
+
+  return Object.freeze(value) as DeepReadonly<T>
+}
+
+export type ReadonlyMilkyEvent = DeepReadonly<MilkyEvent>
+
 export type MilkyEventSourceEventMap = {
   error: ErrorEvent
-  push: MilkyPushEvent<MilkyEvent>
+  push: ReadonlyMilkyEvent
   open: Event
 } & {
-  [P in MilkyEvent['event_type']]: MilkyPushEvent<Extract<MilkyEvent, { event_type: P }>>
+  [P in MilkyEvent['event_type']]: DeepReadonly<Extract<MilkyEvent, { event_type: P }>>
 }
 
-export class MilkyPushEvent<T extends MilkyEvent> extends Event {
-  readonly event: T
-  constructor(event: T, type?: string) {
-    super(type ?? event.event_type as string)
-    this.event = event
-  }
-}
+type MilkyEventSourceEventKey = keyof MilkyEventSourceEventMap
 
-export interface MilkyEventSource extends EventTarget, AsyncIterable<MilkyEvent> {
-  addEventListener<K extends keyof MilkyEventSourceEventMap>(
+export interface MilkyEventSource extends AsyncIterable<ReadonlyMilkyEvent> {
+  on<K extends MilkyEventSourceEventKey>(
     type: K,
-    listener: (this: MilkyEventSource, ev: MilkyEventSourceEventMap[K]) => any,
-    options?: boolean | AddEventListenerOptions
+    listener: (ev: MilkyEventSourceEventMap[K]) => any,
   ): void
-  addEventListener(
+  on(
     type: string,
-    listener: EventListenerOrEventListenerObject,
-    options?: boolean | AddEventListenerOptions
+    listener: (ev: unknown) => any,
   ): void
-  removeEventListener<K extends keyof MilkyEventSourceEventMap>(
+  off<K extends MilkyEventSourceEventKey>(
     type: K,
-    listener: (this: MilkyEventSource, ev: MilkyEventSourceEventMap[K]) => any,
-    options?: boolean | EventListenerOptions
+    listener: (ev: MilkyEventSourceEventMap[K]) => any,
   ): void
-  removeEventListener(
+  off(
     type: string,
-    listener: EventListenerOrEventListenerObject,
-    options?: boolean | EventListenerOptions
+    listener: (ev: unknown) => any,
   ): void
 
   readonly readyState: number
@@ -51,7 +70,7 @@ export interface MilkyEventSource extends EventTarget, AsyncIterable<MilkyEvent>
 
   close(): void
   [Symbol.dispose](): void
-  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEvent>
+  [Symbol.asyncIterator](): AsyncIterableIterator<ReadonlyMilkyEvent>
 }
 
 export interface MilkyEventSourceTerminate<Result> {
@@ -60,8 +79,8 @@ export interface MilkyEventSourceTerminate<Result> {
 }
 
 export class MilkyEventSourceController {
-  private closeHandler: () => void = () => {}
-  private closed = false
+  private _closeHandler: () => void = () => {}
+  private _closed = false
 
   constructor(readonly source: MilkyEventSourceImpl) {}
 
@@ -84,54 +103,55 @@ export class MilkyEventSourceController {
   }
 
   setCloseHandler(closeHandler: () => void): void {
-    this.closeHandler = closeHandler
+    this._closeHandler = closeHandler
   }
 
   markConnecting(): void {
-    if (!this.closed) {
+    if (!this._closed) {
       this.source.readyState = this.source.CONNECTING
     }
   }
 
   markClosed(): void {
-    if (this.closed) {
+    if (this._closed) {
       return
     }
 
-    this.closed = true
+    this._closed = true
     this.source.readyState = this.source.CLOSED
     this.source[finishAsyncIteration]()
   }
 
   dispatchOpen(): void {
-    if (this.closed) {
+    if (this._closed) {
       return
     }
 
     this.source.readyState = this.source.OPEN
-    this.source.dispatchEvent(new Event('open'))
+    this.source.emit('open', new Event('open'))
   }
 
   dispatchMessage(message: MilkyEvent): void {
-    if (this.closed) {
+    if (this._closed) {
       return
     }
 
-    this.source.dispatchEvent(new MilkyPushEvent(message, 'push'))
+    const readonlyMessage = makeDeepReadonly(message)
+    this.source.emit('push', readonlyMessage)
 
-    if (this.closed) {
+    if (this._closed) {
       return
     }
 
-    this.source.dispatchEvent(new MilkyPushEvent(message))
+    this.source.emit(readonlyMessage.event_type, readonlyMessage as never)
   }
 
   dispatchError(error: unknown): void {
-    if (this.closed) {
+    if (this._closed) {
       return
     }
 
-    this.source.dispatchEvent(new ErrorEvent('error', {
+    this.source.emit('error', new ErrorEvent('error', {
       error,
       message: error instanceof Error ? error.message : String(error),
     }))
@@ -143,36 +163,37 @@ export class MilkyEventSourceController {
     }
 
     const onPush = (event: MilkyEventSourceEventMap['push']) => {
-      this.dispatchMessage(event.event)
+      this.dispatchMessage(event as MilkyEvent)
     }
 
     const onError = (event: MilkyEventSourceEventMap['error']) => {
       this.dispatchError(event.error ?? event)
     }
 
-    source.addEventListener('open', onOpen)
-    source.addEventListener('push', onPush)
-    source.addEventListener('error', onError)
+    source.on('open', onOpen)
+    source.on('push', onPush)
+    source.on('error', onError)
 
     return () => {
-      source.removeEventListener('open', onOpen)
-      source.removeEventListener('push', onPush)
-      source.removeEventListener('error', onError)
+      source.off('open', onOpen)
+      source.off('push', onPush)
+      source.off('error', onError)
     }
   }
 
   close(): void {
-    if (this.closed) {
+    if (this._closed) {
       return
     }
 
     this.markClosed()
-    this.closeHandler()
+    this._closeHandler()
   }
 }
 
-export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSource {
-  #closeListeners = new Set<() => void>()
+export class MilkyEventSourceImpl implements MilkyEventSource {
+  private _closeListeners = new Set<() => void>()
+  private _emitter = mitt<MilkyEventSourceEventMap>()
 
   readonly CONNECTING = 0
   readonly OPEN = 1
@@ -185,7 +206,6 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
   readonly controller: MilkyEventSourceController
 
   constructor(setup?: (controller: MilkyEventSourceController) => void) {
-    super()
     this.controller = new MilkyEventSourceController(this)
     setup?.(this.controller)
   }
@@ -198,35 +218,66 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
     this.close()
   }
 
+  on<K extends MilkyEventSourceEventKey>(
+    type: K,
+    listener: (ev: MilkyEventSourceEventMap[K]) => any,
+  ): void
+  on(
+    type: string,
+    listener: (ev: unknown) => any,
+  ): void
+  on(type: string, listener: (ev: unknown) => any): void {
+    this._emitter.on(type as never, listener as never)
+  }
+
+  off<K extends MilkyEventSourceEventKey>(
+    type: K,
+    listener: (ev: MilkyEventSourceEventMap[K]) => any,
+  ): void
+  off(
+    type: string,
+    listener: (ev: unknown) => any,
+  ): void
+  off(type: string, listener: (ev: unknown) => any): void {
+    this._emitter.off(type as never, listener as never)
+  }
+
+  emit<K extends MilkyEventSourceEventKey>(
+    type: K,
+    event: MilkyEventSourceEventMap[K],
+  ): void {
+    this._emitter.emit(type, event)
+  }
+
   [subscribeClose](listener: () => void): () => void {
     if (this.readyState === this.CLOSED) {
       listener()
       return () => {}
     }
 
-    this.#closeListeners.add(listener)
+    this._closeListeners.add(listener)
     return () => {
-      this.#closeListeners.delete(listener)
+      this._closeListeners.delete(listener)
     }
   }
 
   [finishAsyncIteration](): void {
-    const listeners = [...this.#closeListeners]
-    this.#closeListeners.clear()
+    const listeners = [...this._closeListeners]
+    this._closeListeners.clear()
     for (const listener of listeners) {
       listener()
     }
   }
 
-  [Symbol.asyncIterator](): AsyncIterableIterator<MilkyEvent> {
-    const queue: MilkyEvent[] = []
-    const deferreds: Array<(result: IteratorResult<MilkyEvent>) => void> = []
+  [Symbol.asyncIterator](): AsyncIterableIterator<ReadonlyMilkyEvent> {
+    const queue: ReadonlyMilkyEvent[] = []
+    const deferreds: Array<(result: IteratorResult<ReadonlyMilkyEvent>) => void> = []
     let done = this.readyState === this.CLOSED
     let unsubscribeClose = () => {}
 
     const cleanup = () => {
       // eslint-disable-next-line ts/no-use-before-define
-      this.removeEventListener('push', onPush)
+      this.off('push', onPush)
       unsubscribeClose()
     }
 
@@ -245,26 +296,25 @@ export class MilkyEventSourceImpl extends EventTarget implements MilkyEventSourc
       }
     }
 
-    const onPush = (event: Event) => {
+    const onPush = (event: MilkyEventSourceEventMap['push']) => {
       if (done) {
         return
       }
 
-      const message = (event as MilkyEventSourceEventMap['push']).event
       const deferred = deferreds.shift()
       if (deferred) {
         deferred({
           done: false,
-          value: message,
+          value: event,
         })
         return
       }
 
-      queue.push(message)
+      queue.push(event)
     }
 
     if (!done) {
-      this.addEventListener('push', onPush)
+      this.on('push', onPush)
       unsubscribeClose = this[subscribeClose](finish)
     }
 

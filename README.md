@@ -58,27 +58,86 @@ await client.group.quitGroup(
 - `sse`：仅使用 Server-Sent Events
 
 ```ts
-const source = await client.event('auto', {
+const source = client.event('auto', {
   reconnect: {
     interval: 1000,
     attempts: 'always',
   },
 })
 
-source.addEventListener('open', () => {
+// 监听连接打开
+source.on('open', () => {
   console.log('connected')
 })
 
-source.addEventListener('message', (event) => {
-  console.log(event.data)
+// 监听所有事件
+source.on('push', (event) => {
+  console.log(event.event_type, event)
 })
 
-source.addEventListener('error', (event) => {
+// 监听特定类型的事件
+source.on('private_message_created', (event) => {
+  console.log('收到私聊消息:', event.message.content)
+})
+
+// 监听错误
+source.on('error', (event) => {
   console.error(event.message)
 })
 
+// 使用 async iteration
+for await (const event of source) {
+  console.log(event.event_type)
+  if (shouldStop)
+    break
+}
+
 source.close()
 ```
+
+**注意**: 事件对象是深度只读的（immutable），所有嵌套属性都被冻结，无法修改。
+
+### `createMilkyEventSource`
+
+如果需要更底层的事件源控制，可以使用 `createMilkyEventSource` 直接创建事件源。
+
+```ts
+import { createMilkyEventSource } from '@saltify/milky-tea'
+
+// 使用连接类型和选项
+const source = createMilkyEventSource('websocket', {
+  baseURL: 'https://milky.example.com',
+  token: process.env.MILKY_TOKEN,
+  timeout: 15000,
+  reconnect: {
+    interval: 1000,
+    attempts: 5,
+  },
+})
+
+// 或使用自定义传输工厂
+const source = createMilkyEventSource(async (options, signal) => {
+  // 返回 WebSocket 或 EventSource 实例
+  return new WebSocket('wss://milky.example.com/event')
+}, {
+  timeout: 10000,
+})
+
+source.on('open', () => console.log('Connected'))
+source.on('push', event => console.log(event))
+source.close()
+```
+
+**参数**:
+- `kind`: 连接类型 (`'auto'` | `'websocket'` | `'sse'`)
+- `factory`: 自定义传输工厂函数
+- `options`:
+  - `baseURL`: 服务器地址（使用 kind 时必需）
+  - `token`: 访问令牌
+  - `timeout`: 连接超时时间（默认 15000ms）
+  - `reconnect`: 重连配置
+    - `interval`: 重连间隔（毫秒）
+    - `attempts`: 重连次数（`'always'` 或数字）
 
 ### `createMilkyFetch`
 

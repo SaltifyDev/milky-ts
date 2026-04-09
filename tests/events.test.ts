@@ -30,12 +30,8 @@ it('connects websocket transports and forwards push and typed events plus parse 
   const pushEvent = onceEvent(connection.source, 'push')
   const typedEvent = onceEvent(connection.source, 'private_message_created')
   socket.sendMessage(payload)
-  await expect(pushEvent).resolves.toMatchObject({
-    event: payload,
-  })
-  await expect(typedEvent).resolves.toMatchObject({
-    event: payload,
-  })
+  await expect(pushEvent).resolves.toEqual(payload)
+  await expect(typedEvent).resolves.toEqual(payload)
 
   const errorEvent = onceEvent<ErrorEvent>(connection.source, 'error')
   socket.sendRawMessage('{')
@@ -113,12 +109,8 @@ it('connects event sources and reports terminal errors', async () => {
   const pushEvent = onceEvent(connection.source, 'push')
   const typedEvent = onceEvent(connection.source, 'private_message_created')
   source.sendMessage(payload)
-  await expect(pushEvent).resolves.toMatchObject({
-    event: payload,
-  })
-  await expect(typedEvent).resolves.toMatchObject({
-    event: payload,
-  })
+  await expect(pushEvent).resolves.toEqual(payload)
+  await expect(typedEvent).resolves.toEqual(payload)
 
   const parseError = onceEvent<ErrorEvent>(connection.source, 'error')
   source.sendRawMessage('{')
@@ -141,7 +133,7 @@ it('ignores event source errors after the consumer closes the source', async () 
   const connection = await connectEventSource(source as unknown as EventSource)
   let errorCount = 0
 
-  connection.source.addEventListener('error', () => {
+  connection.source.on('error', () => {
     errorCount += 1
   })
 
@@ -214,10 +206,10 @@ it('reconnects websocket transports with native EventSource semantics', async ()
   let openCount = 0
   let errorCount = 0
 
-  source.addEventListener('open', () => {
+  source.on('open', () => {
     openCount += 1
   })
-  source.addEventListener('error', () => {
+  source.on('error', () => {
     errorCount += 1
   })
 
@@ -372,12 +364,8 @@ it('falls back from auto websocket to sse before open', async () => {
   eventSources[0]!.open()
   eventSources[0]!.sendMessage(payload)
 
-  await expect(pushEvent).resolves.toMatchObject({
-    event: payload,
-  })
-  await expect(typedEvent).resolves.toMatchObject({
-    event: payload,
-  })
+  await expect(pushEvent).resolves.toEqual(payload)
+  await expect(typedEvent).resolves.toEqual(payload)
 
   source.close()
   expect(source.readyState).toBe(source.CLOSED)
@@ -423,10 +411,10 @@ it('uses native EventSource reconnection behavior directly', async () => {
 
   let openCount = 0
   let errorCount = 0
-  source.addEventListener('open', () => {
+  source.on('open', () => {
     openCount += 1
   })
-  source.addEventListener('error', () => {
+  source.on('error', () => {
     errorCount += 1
   })
 
@@ -448,12 +436,8 @@ it('uses native EventSource reconnection behavior directly', async () => {
   const pushEvent = onceEvent(source, 'push')
   const typedEvent = onceEvent(source, 'private_message_created')
   nativeSource.sendMessage(payload)
-  await expect(pushEvent).resolves.toMatchObject({
-    event: payload,
-  })
-  await expect(typedEvent).resolves.toMatchObject({
-    event: payload,
-  })
+  await expect(pushEvent).resolves.toEqual(payload)
+  await expect(typedEvent).resolves.toEqual(payload)
 
   source.close()
   expect(source.readyState).toBe(source.CLOSED)
