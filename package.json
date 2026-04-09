@@ -27,7 +27,8 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm run build",
     "fmt": "eslint . --fix",
-    "prepare": "pnpm run generate-api"
+    "prepare": "pnpm run generate-api",
+    "bump": "bumpp"
   },
   "peerDependencies": {
     "eventsource": "^4.1.0"
