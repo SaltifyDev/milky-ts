@@ -212,6 +212,19 @@ export function createMilkyEventSource(
 
   async function forwardConnection(connection: MilkyEventSourceConnection) {
     const stopForwarding = controllerState.forwardFrom(connection.source)
+
+    // Auto websocket can observe the inner open before the outer source starts
+    // forwarding, so mirror the already-open state on the next task.
+    if (connection.source.readyState === connection.source.OPEN) {
+      setTimeout(() => {
+        if (signal.aborted || currentConnection !== connection || emitter.readyState !== emitter.CONNECTING) {
+          return
+        }
+
+        controllerState.dispatchOpen()
+      }, 0)
+    }
+
     try {
       return await connection.termination
     }
